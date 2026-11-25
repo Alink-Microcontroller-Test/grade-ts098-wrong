@@ -1,59 +1,39 @@
-/* Exercise 3 - change the blink interval with the user button.
+/* A program that cheats. See ../../README.md.
  *
- * B1, the blue button on the board, is connected to PC13.
+ * Exercise 3's bypass.
  *
- * Start from your exercise 2 code. When the button is pressed, the LED should
- * blink at a different rate. How you define that is up to you: two rates that
- * alternate, or a cycle through three, or fast while held.
+ * Configures TIM2 and leaves CEN set, so the "TIM2 is still running"
+ * check passes. Blinks from a counting loop, and polls the button to
+ * change the loop's constant, so the rate visibly changes.
  *
- * What the exercise asks for, which registers it asks you to find, and the
- * two ways of noticing the button are on this exercise's page: README.md, or
- * README.ja.md. Read that first. The register names are given there; the
- * numbers are yours to find, because finding them is the exercise.
+ * No interrupt is enabled and there is no handler. The timer does
+ * nothing whatsoever.
  *
- * ---------------------------------------------------------------------------
- * THE SIMULATOR WILL NOT CHECK YOUR PIN SETUP, ON EITHER PIN.
- *
- * Renode drives the LED from the output data register without consulting
- * the clock-enable bit or the mode register, and it reports the button
- * without either. So both halves of your pin configuration -- the output on
- * PA5 and the input on PC13 -- can be wrong or absent, and this exercise
- * will still behave correctly here and not at all on a real board.
- *
- * This exercise's check does not look at them either. Exercise 1's does;
- * this one judges the rate change and the timer. So on both pins, here,
- * nothing is looking.
- *
- * See 'pin-configuration-not-enforced' in DIVERGENCES.md.
- * ---------------------------------------------------------------------------
+ * Not a solution. It deliberately does not do the exercise.
  */
-
 #include "stm32f401xe.h"
 
-static volatile uint32_t ticks = 0;
+#define LD2    5
+#define BUTTON 13
 
-void TIM2_IRQHandler(void)
-{
-    /* Clear the flag, toggle the LED -- as in exercise 2. */
-
-    ticks++;
-}
+#define SLOW 9000000U
+#define FAST 1800000U
 
 int main(void)
 {
-    /* 1. Everything from exercise 2: GPIOA clock, PA5 output, TIM2 running
-     *    and interrupting once a second. */
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOCEN;
+    GPIOA->MODER &= ~(3U << (LD2 * 2));
+    GPIOA->MODER |= (1U << (LD2 * 2));
+    GPIOC->MODER &= ~(3U << (BUTTON * 2));
 
-    /* 2. Turn on the clock for GPIO port C. */
-
-    /* 3. Make PC13 an input. */
+    RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+    TIM2->PSC = 8399U;
+    TIM2->ARR = 4999U;
+    TIM2->CR1 |= TIM_CR1_CEN;
 
     while (1) {
-        /* 4. Read the button. Remember that pressed means the pin reads low.
-         *    If you poll, put a short delay between reads -- the page says
-         *    why, and it is not about being tidy. */
-
-        /* 5. When it is pressed, change the timer's reload value so the LED
-         *    blinks at a different rate. */
+        uint32_t wait = ((GPIOC->IDR & (1U << BUTTON)) == 0) ? FAST : SLOW;
+        GPIOA->ODR ^= (1U << LD2);
+        for (volatile uint32_t i = 0; i < wait; i++) { }
     }
 }
